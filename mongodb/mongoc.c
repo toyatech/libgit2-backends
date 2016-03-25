@@ -274,6 +274,13 @@ int git_odb_backend_mongoc(git_odb_backend **backend_out,
 {
 	mongoc_odb_backend *backend;
 	// TODO implement
+
+	backend->parent.read = &mongoc_odb_backend__read;
+	backend->parent.write = &mongoc_odb_backend__write;
+	backend->parent.read_prefix = &mongoc_odb_backend__read_prefix;
+	backend->parent.read_header = &mongoc_odb_backend__read_header;
+	backend->parent.exists = &mongoc_odb_backend__exists;
+	backend->parent.free = &mongoc_odb_backend__free;
 	
 	*backend_out = (git_odb_backend *) backend;
 
@@ -281,11 +288,37 @@ int git_odb_backend_mongoc(git_odb_backend **backend_out,
 }
 
 int git_refdb_backend_mongoc(git_refdb_backend **backend_out,
-                const char* collection, const char* path, const char *host,
+                const char* collection, const char* path, const char *conn,
                 int port, char* password)
 {
         mongoc_refdb_backend *backend;
+	mongoc_uri_t *uri;
 	// TODO implement
+
+	backend = calloc(1, sizeof (mongoc_odb_backend));
+	if (backend == NULL)
+		return GITERR_NOMEMORY;
+
+	uri = mongoc_uri_new(conn);
+
+	if (pool == NULL) {
+		pool = mongoc_client_pool_new (uri);
+
+	backend->parent.exists = &mongoc_refdb_backend__exists;
+	backend->parent.lookup = &mongoc_refdb_backend__lookup;
+	backend->parent.iterator = &mongoc_refdb_backend__iterator;
+	backend->parent.write = &mongoc_refdb_backend__write;
+	backend->parent.del = &mongoc_refdb_backend__del;
+	backend->parent.rename = &mongoc_refdb_backend__rename;
+	backend->parent.compress = NULL;
+	backend->parent.free = &mongoc_refdb_backend__free;
+
+	backend->parent.has_log = &mongoc_refdb_backend__has_log;
+	backend->parent.ensure_log = &mongoc_refdb_backend__ensure_log;
+	backend->parent.reflog_read = &mongoc_refdb_backend__reflog_read;
+	backend->parent.reflog_write = &mongoc_refdb_backend__reflog_write;
+	backend->parent.reflog_rename = &mongoc_refdb_backend__reflog_rename;
+	backend->parent.reflog_delete = &mongoc_refdb_backend__reflog_delete;
 
 	*backend_out = (git_refdb_backend *) backend;
 
