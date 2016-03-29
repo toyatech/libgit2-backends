@@ -35,16 +35,18 @@
 
 typedef struct {
 	git_odb_backend parent;
-	// TODO implement
 
-	mongoc_collection_t *objects;
+	char *collection;
+
+	mongoc_client_pool_t *pool;
 } mongoc_odb_backend;
 
 typedef struct {
 	git_refdb_backend parent;
-	// TODO implement
+	
+	char *collection;
 
-	mongoc_collection_t *refs;
+	mongoc_client_pool_t *pool;
 } mongoc_refdb_backend;
 
 typedef struct {
@@ -53,7 +55,7 @@ typedef struct {
 
 } mongoc_refdb_iterator;
 
-static mongoc_client_pool_t *pool = NULL;
+static mongoc_client_pool_t *shared_pool = NULL;
 
 /* Odb methods */
 
@@ -62,9 +64,22 @@ int mongoc_odb_backend__read_header(size_t *len_p, git_otype *type_p,
 {
 	mongoc_odb_backend *backend;
 	int error;
+	mongoc_client_pool_t *pool;
+	mongoc_client_t *client;
+	mongoc_collection_t *collection;
+	mongoc_cursor_t *cursor;
+	const bson_t *doc;
+	bson_t *query;
+	
         // TODO implement
 
+	assert(len_p && type_p && _backend && oid);
+
+	backend = (mongoc_odb_backend *) _backend;
+	pool = (mongoc_client_pool_t *) backend->pool;
 	error = GIT_ERROR;
+
+	client = mongoc_client_pool_pop
 
         return error;
 }
@@ -194,27 +209,26 @@ int mongoc_refdb_backend__write(git_refdb_backend *_backend,
 
 int mongoc_refdb_backend__rename(git_reference **out, 
 		git_refdb_backend *_backend, const char *old_name,
-		const char *new_name, const git_signature *who, 
+		const char *new_name, int force, const git_signature *who, 
 		const char *message)
 {
 	mongoc_refdb_backend *backend;
-	int error = GIT_OK;
 	// TODO implement
 	
-	return error;
+	return mongoc_refdb_backend__lookup(out, _backend, new_name);
 }
 
 int mongoc_refdb_backend__del(git_refdb_backend *_backend, const char *ref_name,
 		const git_oid *old, const char *old_target)
 {
 	mongoc_refdb_backend *backend;
-	int error = GIT_OK
+	int error = GIT_OK;
 	// TODO implement
 
-	return error;
+	free(backend);
 }
 
-int mongoc_refdb_backend__free(git_refdb_backend *_backend)
+void mongoc_refdb_backend__free(git_refdb_backend *_backend)
 {
 	mongoc_refdb_backend *backend;
 	// TODO implement
@@ -269,11 +283,24 @@ int mongoc_refdb_backend__reflog_delete(git_refdb_backend *_backend,
 /* Constructors */
 
 int git_odb_backend_mongoc(git_odb_backend **backend_out, 
-		const char* collection, const char* path, const char *host,
-		int port, char* password)
+		const char* connection, const char* collection)
 {
 	mongoc_odb_backend *backend;
+	mongoc_uri_t *uri;
 	// TODO implement
+
+	backend = calloc(1, sizeof (mongoc_odb_backend));
+	if (backend == NULL)
+		return GITERR_NOMEMORY;
+
+	uri = mongoc_uri_new (backend->uri);
+
+	if (pool == NULL) {
+		pool = mongoc_client_pool_new (uri);
+        }
+
+	backend->pool = pool;
+	backend->collection = strdup(collection);
 
 	backend->parent.read = &mongoc_odb_backend__read;
 	backend->parent.write = &mongoc_odb_backend__write;
@@ -288,8 +315,7 @@ int git_odb_backend_mongoc(git_odb_backend **backend_out,
 }
 
 int git_refdb_backend_mongoc(git_refdb_backend **backend_out,
-                const char* collection, const char* path, const char *conn,
-                int port, char* password)
+                const char* connection, const char *collection)
 {
         mongoc_refdb_backend *backend;
 	mongoc_uri_t *uri;
@@ -303,6 +329,7 @@ int git_refdb_backend_mongoc(git_refdb_backend **backend_out,
 
 	if (pool == NULL) {
 		pool = mongoc_client_pool_new (uri);
+        }
 
 	backend->parent.exists = &mongoc_refdb_backend__exists;
 	backend->parent.lookup = &mongoc_refdb_backend__lookup;
